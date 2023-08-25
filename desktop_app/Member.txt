@@ -1,0 +1,172 @@
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Data;
+using System.Drawing;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+using System.Data.SqlClient;
+
+namespace project1
+{
+    public partial class Member : Form
+    {
+        SqlConnection conn = new SqlConnection(@"Data Source=.\SQLEXPRESS;Initial Catalog=HovLibrary;Integrated Security=True");
+        public Member()
+        {
+            InitializeComponent();
+        }
+
+        private void LoadData()
+        {
+            dgvMember.Rows.Clear();
+            String query = "SELECT id, name, phone_number, email, city_of_birth, date_of_birth, address, gender FROM Member";
+            SqlDataAdapter sda = new SqlDataAdapter(query, conn);
+            DataTable dt = new DataTable();
+            sda.Fill(dt);
+
+            foreach (DataRow dr in dt.Rows)
+            {
+                dgvMember.Rows.Add(dr["id"], dr["name"], dr["phone_number"], dr["email"], dr["city_of_birth"], dr["date_of_birth"], dr["address"], dr["gender"]);
+            }
+        }
+
+        private void Member_Load(object sender, EventArgs e)
+        {
+            //String query = "SELECT id AS[ID], name AS[Name], phone_number AS[Phone], email AS[Email], city_of_birth AS[City Of Birth], date_of_birth AS[Date Of Birth], address AS[Address], gender AS[Gender] FROM Member";
+            LoadData();
+
+            DataGridViewButtonColumn buttonColumn = new DataGridViewButtonColumn();
+            buttonColumn.HeaderText = "Action";
+            buttonColumn.Text = "Edit";
+            buttonColumn.Name = "Action";
+            buttonColumn.UseColumnTextForButtonValue = true;
+            dgvMember.Columns.Add(buttonColumn);
+
+            dgvMember.CellClick += buttonColumn_Click;
+            dgvMember.SelectionChanged += row_SelectionChanged;
+
+        }
+
+        private void row_SelectionChanged(object sender, EventArgs e)
+        {
+            if (dgvMember.SelectedRows.Count > 0)
+            {
+                int selectRow = dgvMember.SelectedRows[0].Index;
+                string idSelected = dgvMember.Rows[selectRow].Cells["Column1"].Value.ToString();
+
+                String query = "SELECT id, name, phone_number, email, city_of_birth, date_of_birth, address, gender FROM Member WHERE id='"+idSelected+"'";
+                SqlDataAdapter sda = new SqlDataAdapter(query, conn);
+                DataTable dt = new DataTable();
+                sda.Fill(dt);
+
+                if (dt.Rows.Count > 0)
+                {
+                    txtName.Text = dt.Rows[0]["name"].ToString();
+                    txtPhone.Text = dt.Rows[0]["phone_number"].ToString();
+                    txtEmail.Text = dt.Rows[0]["email"].ToString();
+                    txtCity.Text = dt.Rows[0]["city_of_birth"].ToString();
+                    dtpBirth.Text = dt.Rows[0]["date_of_birth"].ToString();
+                    rtxtAddress.Text = dt.Rows[0]["address"].ToString();
+
+                    if (dt.Rows[0]["gender"].ToString() == "Male")
+                    {
+                        rdoMale.Checked = true;
+                    }
+                    else if (dt.Rows[0]["gender"].ToString() == "Female")
+                    {
+                        rdoFemale.Checked = true;
+                    }
+                    // You can similarly set other TextBoxes or controls with the retrieved data
+                }
+                else
+                {
+                    txtName.Text = "";
+                    // Handle case where no data is found for the selected id
+                }
+            }
+        }
+
+        private void buttonColumn_Click(object sender, DataGridViewCellEventArgs e)
+        {
+            if (e.RowIndex >= 0 && e.ColumnIndex == dgvMember.Columns["Action"].Index)
+            {
+                DataGridViewRow row = dgvMember.Rows[e.RowIndex];
+                string valueID = row.Cells["Column1"].Value.ToString();
+
+                string query = "SELECT id, name, phone_number, email, city_of_birth, date_of_birth, address, gender FROM Member WHERE id='" + valueID + "'";
+                SqlDataAdapter sda = new SqlDataAdapter(query, conn);
+                DataTable dt = new DataTable();
+                sda.Fill(dt);
+
+                txtName.Enabled = true;
+                txtPhone.Enabled = true;
+                txtEmail.Enabled = true;
+                txtCity.Enabled = true;
+                dtpBirth.Enabled = true;
+                rtxtAddress.Enabled = true;
+                rdoMale.Enabled = true;
+                rdoFemale.Enabled = true;
+                btnSave.Enabled = true;
+
+                txtID.Text = dt.Rows[0]["id"].ToString();
+                txtName.Text = dt.Rows[0]["name"].ToString();
+                txtPhone.Text = dt.Rows[0]["phone_number"].ToString();
+                txtEmail.Text = dt.Rows[0]["email"].ToString();
+                txtCity.Text = dt.Rows[0]["city_of_birth"].ToString();
+                dtpBirth.Text = dt.Rows[0]["date_of_birth"].ToString();
+                rtxtAddress.Text = dt.Rows[0]["address"].ToString();
+
+                if (dt.Rows[0]["gender"].ToString() == "Male")
+                {
+                    rdoMale.Checked = true;
+                }
+                else if (dt.Rows[0]["gender"].ToString() == "Female")
+                {
+                    rdoFemale.Checked = true;
+                }
+            }
+            else
+            {
+                txtName.Enabled = false;
+                txtPhone.Enabled = false;
+                txtEmail.Enabled = false;
+                txtCity.Enabled = false;
+                dtpBirth.Enabled = false;
+                rtxtAddress.Enabled = false;
+                rdoMale.Enabled = false;
+                rdoFemale.Enabled = false;
+                btnSave.Enabled = false;
+            }
+        }
+
+        private void btnSave_Click(object sender, EventArgs e)
+        {
+            string genderValue = "";
+            if (rdoMale.Checked == true)
+            {
+                genderValue = "Male";
+            }
+            else if (rdoFemale.Checked == true)
+            {
+                genderValue = "Female";
+            }
+            string query = "UPDATE Member SET name='" + txtName.Text + "', phone_number='" + txtPhone.Text + "', email='" + txtEmail.Text + "', city_of_birth='" + txtCity.Text + "', date_of_birth='" + dtpBirth.Text + "', address='" + rtxtAddress.Text + "', gender='" + genderValue + "' WHERE id='"+txtID.Text+"'";
+            try
+            {
+                conn.Open();
+                SqlCommand cmd = new SqlCommand(query, conn);
+                cmd.ExecuteNonQuery();
+                MessageBox.Show("Update Success");
+                LoadData();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Error = " + ex);
+            }
+            finally { conn.Close(); }
+        }
+    }
+}

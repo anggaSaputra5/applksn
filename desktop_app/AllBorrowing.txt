@@ -1,0 +1,81 @@
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Data;
+using System.Drawing;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+using System.Data.SqlClient;
+
+namespace project1
+{
+    public partial class AllBorrowing : Form
+    {
+        SqlConnection conn = new SqlConnection(@"Data Source=.\SQLEXPRESS;Initial Catalog=HovLibrary;Integrated Security=True");
+        public AllBorrowing()
+        {
+            InitializeComponent();
+        }
+
+        public void LoadData(string query)
+        {
+            dgvBorrow.Rows.Clear();
+            using (SqlDataAdapter sda = new SqlDataAdapter(query, conn))
+            {
+                DataTable dt = new DataTable();
+                sda.Fill(dt);
+
+                foreach (DataRow dr in dt.Rows)
+                {
+                    int rowIndex = dgvBorrow.Rows.Add(dr["id"], dr["name"], dr["title"], dr["code"], dr["borrow_date"], dr["return_date"], dr["fine"]);
+                }
+            }
+        }
+
+        public void filter(string query, DateTime date1, DateTime date2)
+        {
+            dgvBorrow.Rows.Clear();
+            using (SqlDataAdapter sda = new SqlDataAdapter(query, conn))
+            {
+                sda.SelectCommand.Parameters.Add("@date1", date1);
+                sda.SelectCommand.Parameters.Add("@date2", date2);
+                DataTable dt = new DataTable();
+                sda.Fill(dt);
+
+                foreach (DataRow dr in dt.Rows)
+                {
+                    int rowIndex = dgvBorrow.Rows.Add(dr["id"], dr["name"], dr["title"], dr["code"], dr["borrow_date"], dr["return_date"], dr["fine"]);
+                }
+            }
+        }
+
+        private void AllBorrowing_Load(object sender, EventArgs e)
+        {
+            string query = "SELECT *, Member.name AS member_name FROM Borrowing " +
+                "INNER JOIN Member ON Borrowing.member_id = Member.id " +
+                "LEFT JOIN BookDetails ON Borrowing.bookdetails_id = BookDetails.id " +
+                "LEFT JOIN Book ON BookDetails.book_id = Book.id ";
+            LoadData(query);
+        }
+
+        private void btnApply_Click(object sender, EventArgs e)
+        {
+            if (string.IsNullOrWhiteSpace(cbStatus.Text))
+            {
+                MessageBox.Show("Status must be filled");
+            }
+            else
+            {
+                string query = "SELECT *, Member.name AS member_name FROM Borrowing " +
+                    "INNER JOIN Member ON Borrowing.member_id = Member.id " +
+                    "LEFT JOIN BookDetails ON Borrowing.bookdetails_id = BookDetails.id " +
+                    "LEFT JOIN Book ON BookDetails.book_id = Book.id";
+                DateTime date1 = dtpBorrow.Value;
+                DateTime date2 = dtpBorrow2.Value;
+                filter(query, date1, date2);
+            }
+        }
+    }
+}

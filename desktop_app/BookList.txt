@@ -1,0 +1,171 @@
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Data;
+using System.Data.SqlClient;
+using System.Drawing;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+
+namespace project1
+{
+    public partial class BookList : Form
+    {
+        SqlConnection conn = new SqlConnection(@"Data Source=.\SQLEXPRESS;Initial Catalog=HovLibrary;Integrated Security=True");
+        private int bookID;
+        private string bookTitle;
+        private string idRows;
+        private int locationInt;
+        private string code;
+        public BookList()
+        {
+            InitializeComponent();
+        }
+
+        private void LoadData()
+        {
+            dgvBookList.Rows.Clear();
+            Book book = (Book)this.Owner;
+            bookID = book.id;
+            bookTitle = book.title;
+
+            string query = "SELECT * FROM BookDetails LEFT JOIN Borrowing ON BookDetails.id = Borrowing.bookdetails_id INNER JOIN Location ON BookDetails.location_id = Location.id WHERE BookDetails.book_id='" + bookID + "' AND BookDetails.deleted_at IS NULL";
+            SqlDataAdapter sda = new SqlDataAdapter(query, conn);
+            DataTable dt = new DataTable();
+            sda.Fill(dt);
+
+            foreach (DataRow dr in dt.Rows)
+            {
+                if (DateTime.TryParse(dr["borrow_date"].ToString(), out DateTime borrowDate) && dr["return_date"] == DBNull.Value)
+                {
+                    dgvBookList.Rows.Add(dr["id"], dr["code"], dr["name"], "Unavailable");
+                }
+                else
+                {
+                    dgvBookList.Rows.Add(dr["id"], dr["code"], dr["name"], "Available");
+                }
+            }
+        }
+
+        private void BookList_Load(object sender, EventArgs e)
+        {
+            LoadData();
+            txtTitle.Text = bookTitle;
+            string query = "SELECT name FROM Location";
+            SqlDataAdapter sda = new SqlDataAdapter(query, conn);
+            DataTable dt = new DataTable();
+            sda.Fill(dt);
+
+            foreach (DataRow dr in dt.Rows)
+                cbLocation.Items.Add(dr["name"]);
+        }
+
+        private void btnSubmit_Click(object sender, EventArgs e)
+        {
+            string query = "INSERT INTO BookDetails (book_id, location_id, code, created_at) Values (@bookID, @locationID, @code, @created_at)";
+            DateTime date = DateTime.Now;
+            try
+            {
+                using (SqlCommand cmd = new SqlCommand(query, conn))
+                {
+                    conn.Open();
+                    cmd.Parameters.Add("@bookID", bookID);
+                    cmd.Parameters.Add("@locationID", locationInt);
+                    cmd.Parameters.Add("@code", code);
+                    cmd.Parameters.Add("@created_at", date);
+                    cmd.ExecuteNonQuery();
+                    MessageBox.Show("Data added successufully");
+                    LoadData();
+                }
+            }
+            catch (Exception ex) { MessageBox.Show("Error: " + ex); }
+            finally { conn.Close(); }
+        }
+
+        private void dgvBookList_CellContentClick(object sender, DataGridViewCellEventArgs e)
+        {
+            if (dgvBookList.Columns[e.ColumnIndex].Name == "Delete")
+            {
+                string id = dgvBookList.Rows[e.RowIndex].Cells["ID"].Value.ToString();
+                DateTime dateTime = DateTime.Now;
+                DialogResult confirmation = MessageBox.Show("Are you sure to delete ID: '"+id+"'?", "Question", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                if (confirmation == DialogResult.Yes)
+                {
+                    try
+                    {
+                        conn.Open();
+                        string query = "UPDATE BookDetails SET deleted_at=@Date WHERE id=@ID";
+                        using (SqlCommand cmd = new SqlCommand(query, conn))
+                        {
+                            cmd.Parameters.Add("@Date", dateTime);
+                            cmd.Parameters.Add("@ID", id);
+                            cmd.ExecuteNonQuery();
+                            MessageBox.Show("Delete Success");
+                            LoadData();
+                        }
+                    }
+                    catch (Exception ex) { MessageBox.Show("Error : " + ex); }
+                    finally { conn.Close(); }
+                }
+                else
+                {
+                    MessageBox.Show("Delete canceled");
+                }
+            }
+        }
+
+        private void LoadCode(string location)
+        {
+            DateTime dateTime = DateTime.Now;
+            int year = dateTime.Year;
+
+            string query = "SELECT * FROM BookDetails WHERE id='" + idRows + "'";
+            SqlDataAdapter sda = new SqlDataAdapter(query, conn);
+            DataTable dt = new DataTable();
+            sda.Fill(dt);
+
+            code = ((int)dt.Rows[0]["id"]).ToString("0000") + "." + ((int)dt.Rows[0]["book_id"]).ToString("0000")
+                + "." + location + "." + year.ToString();
+
+            txtCode.Text = code;
+        }
+
+        private void dgvBookList_CellClick(object sender, DataGridViewCellEventArgs e)
+        {
+            if (e.RowIndex >= 0)
+            {
+                idRows = dgvBookList.Rows[e.RowIndex].Cells["ID"].Value.ToString();
+                string Location = dgvBookList.Rows[e.RowIndex].Cells["Location"].Value.ToString();
+
+                cbLocation.Text = Location;
+
+                string query = "SELECT * FROM BookDetails WHERE id='" + idRows + "'";
+                SqlDataAdapter sda = new SqlDataAdapter(query, conn);
+                DataTable dt = new DataTable();
+                sda.Fill(dt);
+
+                int locationInt = (int)dt.Rows[0]["id"];
+                string locationString = locationInt.ToString("00");
+
+                LoadCode(locationString);
+
+                btnSubmit.Enabled = true;
+            }
+        }
+
+        private void cbLocation_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            string varLocation = cbLocation.Text;
+            string query = "SELECT id FROM Location WHERE name='"+varLocation+"'";
+            SqlDataAdapter sda = new SqlDataAdapter(query, conn);
+            DataTable dt = new DataTable();
+            sda.Fill(dt);
+            locationInt = (int)dt.Rows[0]["id"];
+            string locationString = locationInt.ToString("00");
+
+            LoadCode(locationString);
+        }
+    }
+}

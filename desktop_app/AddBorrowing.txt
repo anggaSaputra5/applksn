@@ -1,0 +1,168 @@
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Data;
+using System.Drawing;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+using System.Data.SqlClient;
+using System.Collections;
+
+namespace project1
+{
+    public partial class AddBorrowing : Form
+    {
+        SqlConnection conn = new SqlConnection(@"Data Source=.\SQLEXPRESS;Initial Catalog=HovLibrary;Integrated Security=True");
+        string[] title;
+        string[] member;
+        string memberID;
+        List<string> ListBook = new List<string>();
+        public AddBorrowing()
+        {
+            InitializeComponent();
+        }
+
+        private void LoadData(string query, string txt1, string value1)
+        {
+            dgvBorrowing.Rows.Clear();
+            using (SqlDataAdapter sda = new SqlDataAdapter(query, conn))
+            {
+                sda.SelectCommand.Parameters.Add(txt1, value1);
+                DataTable dt = new DataTable();
+                sda.Fill(dt);
+                title = new string[dt.Rows.Count];
+                for (int i = 0; i < dt.Rows.Count; i++)
+                {
+                    title[i] = dt.Rows[i]["title"].ToString();
+                }
+                DateTime dateTime = DateTime.Now;
+
+                foreach (DataRow dr in dt.Rows)
+                {
+                    if (DateTime.TryParse(dr["borrow_date"].ToString(), out DateTime borrowDate) && dr["return_date"] == DBNull.Value)
+                    {
+                        dgvBorrowing.Rows.Add(dr["id"], dr["code"], dr["name"], "Unavailable");
+                    }
+                    else
+                    {
+                        dgvBorrowing.Rows.Add(dr["id"], dr["code"], dr["name"], "Available");
+                    }
+                }
+            }
+            
+        }
+
+        private void SearchMember(string query)
+        {
+            using (SqlDataAdapter sda = new SqlDataAdapter(query, conn))
+            {
+                DataTable dt = new DataTable();
+                sda.Fill(dt);
+
+                member = new string[dt.Rows.Count];
+                for (int i = 0; i < dt.Rows.Count; i++)
+                {
+                    member[i] = dt.Rows[i]["MemberName"].ToString();
+                }
+            }
+        }
+
+        private void AddBorrowing_Load(object sender, EventArgs e)
+        {
+            string query = "SELECT *, Member.name AS MemberName FROM BookDetails INNER JOIN Book ON BookDetails.book_id = Book.id " +
+                "INNER JOIN Location ON BookDetails.location_id = Location.id " +
+                "LEFT JOIN Borrowing ON BookDetails.id = Borrowing.bookdetails_id " +
+                "LEFT JOIN Member ON Borrowing.member_id = Member.id WHERE BookDetails.deleted_at IS NULL";
+            LoadData(query, "", "");
+            SearchMember(query);
+
+            AutoCompleteStringCollection autoCompleteTitle = new AutoCompleteStringCollection();
+            autoCompleteTitle.AddRange(title);
+            txtTitle.AutoCompleteMode = AutoCompleteMode.Suggest;
+            txtTitle.AutoCompleteSource = AutoCompleteSource.CustomSource;
+            txtTitle.AutoCompleteCustomSource = autoCompleteTitle;
+
+            AutoCompleteStringCollection autoCompleteMember = new AutoCompleteStringCollection();
+            autoCompleteMember.AddRange(member);
+            txtMember.AutoCompleteMode = AutoCompleteMode.Suggest;
+            txtMember.AutoCompleteSource = AutoCompleteSource.CustomSource;
+            txtMember.AutoCompleteCustomSource = autoCompleteMember;
+        }
+
+        private void dgvBorrowing_CellContentClick(object sender, DataGridViewCellEventArgs e)
+        {
+            if (dgvBorrowing.Columns[e.ColumnIndex].Name == "CheckBox")
+            {
+                DataGridViewCheckBoxCell checkBox = dgvBorrowing.Rows[e.RowIndex].Cells[e.ColumnIndex] as DataGridViewCheckBoxCell;
+                if (Convert.ToBoolean(checkBox.Value) == false)
+                {
+                    dgvBorrowing.Rows[e.RowIndex].Cells["CheckBox"].Value = true;
+                    ListBook.Add(dgvBorrowing.Rows[e.RowIndex].Cells["ID"].Value.ToString());
+                }
+                else if (Convert.ToBoolean(checkBox.Value) == true)
+                {
+                    dgvBorrowing.Rows[e.RowIndex].Cells["CheckBox"].Value = false;
+                    ListBook.Remove(dgvBorrowing.Rows[e.RowIndex].Cells["ID"].Value.ToString());
+                }
+            }
+        }
+
+        private void txtTitle_TextChanged(object sender, EventArgs e)
+        {
+            string query = "SELECT * FROM BookDetails INNER JOIN Book ON BookDetails.book_id = Book.id " +
+                "INNER JOIN Location ON BookDetails.location_id = Location.id " +
+                "LEFT JOIN Borrowing ON BookDetails.id = Borrowing.bookdetails_id " +
+                "LEFT JOIN Member ON Borrowing.member_id = Member.id WHERE BookDetails.deleted_at IS NULL AND title = @title";
+            LoadData(query, "@title", txtTitle.Text);
+        }
+
+        private void SelectMember()
+        {
+            string query = "SELECT id FROM Member WHERE name = @name";
+            using (SqlDataAdapter sda = new SqlDataAdapter(query, conn))
+            {
+                sda.SelectCommand.Parameters.Add("@name", txtMember.Text);
+                DataTable dt = new DataTable();
+                sda.Fill(dt);
+                if (dt.Rows.Count > 0)
+                {
+                    memberID = dt.Rows[0]["id"].ToString();
+                }
+            }
+        }
+
+        private void btnSubmit_Click(object sender, EventArgs e)
+        {
+            SelectMember();
+            if (!string.IsNullOrEmpty(memberID))
+            {
+                for (int i = 0; i < ListBook.Count; i++)
+                {
+                    DateTime dateTime = DateTime.Now;
+                    string query = "INSERT INTO Borrowing (member_id, bookdetails_id, borrow_date) VALUES (@memberID, @bookID, @borrowDate)";
+                    try
+                    {
+                        conn.Open();
+                        using (SqlCommand cmd = new SqlCommand(query, conn))
+                        {
+                            cmd.Parameters.Add("@memberID", memberID);
+                            cmd.Parameters.Add("@bookID", ListBook[i]);
+                            cmd.Parameters.Add("@borrowDate", dateTime);
+                            cmd.ExecuteNonQuery();
+                            MessageBox.Show("Book success borrowed");
+                        }
+                    }
+                    catch (Exception ex) { MessageBox.Show(ex.Message); }
+                    finally { conn.Close();  }
+                }
+            }
+            else
+            {
+                MessageBox.Show ("Member not found");
+            }
+        }
+    }
+
+}

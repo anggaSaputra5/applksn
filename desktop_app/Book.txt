@@ -1,0 +1,221 @@
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Data;
+using System.Drawing;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+using System.Data.SqlClient;
+using System.Globalization;
+
+namespace project1
+{
+    public partial class Book : Form
+    {
+        public int id;
+        public string title;
+
+        SqlConnection conn = new SqlConnection(@"Data Source=.\SQLEXPRESS;Initial Catalog=HovLibrary;Integrated Security=True");
+        public Book()
+        {
+            InitializeComponent();
+        }
+
+        private void LoadData() 
+        {
+            dgvBook.Rows.Clear();
+            string query = "SELECT * FROM Book INNER JOIN Language ON Book.language_id = Language.id INNER JOIN Publisher ON Book.publisher_id = Publisher.id WHERE Book.deleted_at IS NULL";
+            SqlDataAdapter sda = new SqlDataAdapter(query, conn);
+            DataTable dt = new DataTable();
+            sda.Fill(dt);
+
+            foreach (DataRow dr in dt.Rows)
+            {
+                DateTime publicationDate = DateTime.Parse(dr["publication_date"].ToString());
+                string formattedPublicationDate = publicationDate.ToString("dd MMMM yyyy");
+                dgvBook.Rows.Add(dr["id"], dr["long_text"], dr["title"], dr["isbn"], dr["isbn13"], dr["authors"], dr["name"], formattedPublicationDate, dr["number_of_pages"], dr["average_rating"] + " (" + dr["ratings_count"] + ")");
+
+            }
+        }
+
+        private void Book_Load(object sender, EventArgs e)
+        {
+            LoadData();
+            string query = "SELECT long_text FROM Language";
+            SqlDataAdapter sda = new SqlDataAdapter(query, conn);
+            DataTable dt = new DataTable();
+            sda.Fill(dt);
+
+            foreach (DataRow dr in dt.Rows)
+            {
+                cbLanguage.Items.Add(dr["long_text"]);
+
+            }
+        }
+
+        private void dgvBook_CellContentClick(object sender, DataGridViewCellEventArgs e)
+        {
+
+            if (dgvBook.Columns[e.ColumnIndex].Name == "Book_List")
+            {
+                id = (int)dgvBook.Rows[e.RowIndex].Cells["ID"].Value;
+                title = dgvBook.Rows[e.RowIndex].Cells["Title"].Value.ToString();
+                BookList bookList = new BookList();
+                bookList.Owner = this;
+                bookList.ShowDialog();
+            }
+
+            if (dgvBook.Columns[e.ColumnIndex].Name == "Edit")
+            {
+                string id = dgvBook.Rows[e.RowIndex].Cells["ID"].Value.ToString();
+                string language = dgvBook.Rows[e.RowIndex].Cells["Language"].Value.ToString();
+                string title = dgvBook.Rows[e.RowIndex].Cells["Title"].Value.ToString();
+                string isbn = dgvBook.Rows[e.RowIndex].Cells["ISBN"].Value.ToString();
+                string isbn13 = dgvBook.Rows[e.RowIndex].Cells["ISBN13"].Value.ToString();
+                string authors = dgvBook.Rows[e.RowIndex].Cells["Authors"].Value.ToString();
+                string publisher = dgvBook.Rows[e.RowIndex].Cells["Publisher"].Value.ToString();
+                string publish_date = dgvBook.Rows[e.RowIndex].Cells["Publish_Date"].Value.ToString();
+                string page_count = dgvBook.Rows[e.RowIndex].Cells["Page_Count"].Value.ToString();
+                string query = "SELECT average_rating FROM Book WHERE id='"+id+"'";
+                SqlDataAdapter sda = new SqlDataAdapter(query, conn);
+                DataTable dt = new DataTable();
+                sda.Fill(dt);
+
+                textBox1.Text = language;
+                textBox2.Text = title;
+                textBox3.Text = isbn;
+                textBox4.Text = isbn13;
+                textBox5.Text = authors;
+                textBox6.Text = publisher;
+                dateTimePicker.Text = publish_date;
+                textBox7.Text = page_count;
+                textBox8.Text = dt.Rows[0]["average_rating"].ToString();
+
+                textBox1.Enabled = true;
+                textBox2.Enabled = true;
+                textBox3.Enabled = true;
+                textBox4.Enabled = true;
+                textBox5.Enabled = true;
+                textBox6.Enabled = true;
+                dateTimePicker.Enabled = true;
+                textBox7.Enabled = true;
+                textBox8.Enabled = true;
+                btnSave.Enabled = true;
+            }
+
+            if (dgvBook.Columns[e.ColumnIndex].Name == "Delete")
+            {
+                string id = dgvBook.Rows[e.RowIndex].Cells["ID"].Value.ToString();
+                string title = dgvBook.Rows[e.RowIndex].Cells["Title"].Value.ToString();
+                DialogResult dialogResult = MessageBox.Show("Are you sure to delete " + title + "?", "Question", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+
+                if (dialogResult == DialogResult.Yes)
+                {
+                    try
+                    {
+                        conn.Open();
+                        DateTime dateTime = DateTime.Now;
+                        string query = "UPDATE Book SET deleted_at=@DeleteAt WHERE id='"+id+"'";
+                        SqlCommand cmd = new SqlCommand(query, conn);
+                        cmd.Parameters.AddWithValue("@DeleteAt", dateTime);
+                        cmd.ExecuteNonQuery();
+                        MessageBox.Show("Delete Success");
+                        LoadData();
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show(ex.Message);
+                    }
+                    finally { conn.Close(); }
+                }
+                else
+                {
+                    MessageBox.Show("Delete Canceled");
+                }
+            }
+        }
+
+        private void btnSave_Click(object sender, EventArgs e)
+        {
+            float averageRating = 0.0f;
+            if (float.TryParse(textBox8.Text, out averageRating))
+            {
+                string averageRatings = textBox8.Text.Replace(",", ".");
+                string title = textBox2.Text.Replace("'","''");
+                string query = "UPDATE Book SET title='" + title + "', authors='" + textBox5.Text + "', isbn='" + textBox3.Text + "'," +
+                "isbn13='" + textBox4.Text + "', number_of_pages='" + textBox7.Text + "', average_rating='" + averageRatings + "' WHERE id='" + id + "'; UPDATE Language SET long_text='" + textBox1.Text + "' WHERE id IN (SELECT language_id FROM Book WHERE id='" + id + "'); UPDATE Publisher SET name='" + textBox6.Text + "' WHERE id IN (SELECT publisher_id FROM Book WHERE id='" + id + "')";
+                //string query = "UPDATE Book INNER JOIN Language ON Book.language_id = Language.id INNER JOIN Publisher ON Book.publisher_id = Publisher.id SET Book.title='" + textBox2.Text + "', Book.authors='" + textBox5.Text + "', Book.isbn='" + textBox3.Text + "', Book.isbn13='" + textBox4.Text + "', Book.number_of_pages='" + textBox7.Text + "', Book.average_rating='" + averageRatings + "', Language.long_text='" + textBox1.Text + "', Publisher.name='" + textBox6.Text + "' WHERE Book.id='" + id + "'";
+                try
+                {
+                    conn.Open();
+                    SqlCommand cmd = new SqlCommand(query, conn);
+                    cmd.ExecuteNonQuery();
+                    MessageBox.Show("Data dengan id = " + id + " berhasil diperbaharui");
+                    LoadData();
+
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("Error : " + ex);
+                }
+                finally { conn.Close(); }
+            }
+            else
+            {
+                MessageBox.Show("Invalid rating");
+            }
+        }
+
+        private void search(string text)
+        {
+            dgvBook.Rows.Clear();
+            string query = "SELECT * FROM Book INNER JOIN Language ON Book.language_id = Language.id INNER JOIN Publisher ON Book.publisher_id = Publisher.id WHERE "+text+" LIKE '%" + txtKeyword.Text + "%'";
+            SqlDataAdapter sda = new SqlDataAdapter(query, conn);
+            DataTable dt = new DataTable();
+            sda.Fill(dt);
+            foreach (DataRow dr in dt.Rows)
+            {
+                DateTime publicationDate = DateTime.Parse(dr["publication_date"].ToString());
+                string formattedPublicationDate = publicationDate.ToString("dd MMMM yyyy");
+                dgvBook.Rows.Add(dr["id"], dr["long_text"], dr["title"], dr["isbn"], dr["isbn13"], dr["authors"], dr["name"], formattedPublicationDate, dr["number_of_pages"], dr["average_rating"] + " (" + dr["ratings_count"] + ")");
+            }
+        }
+
+        private void btnSearch_Click(object sender, EventArgs e)
+        {
+            if (cbSearch.Text == "Title")
+            {
+                search("title");
+            }
+            else if (cbSearch.Text == "Author")
+            {
+                search("authors");
+            }else if (cbSearch.Text == "Publisher")
+            {
+                search("name");
+            }
+        }
+
+        private void btnApply_Click(object sender, EventArgs e)
+        {
+            LoadData();
+            dgvBook.Rows.Clear();
+            string query = "SELECT * FROM Book INNER JOIN Language ON Book.language_id = Language.id INNER JOIN Publisher ON Book.publisher_id = Publisher.id WHERE Language.long_text='" + cbLanguage.Text+"'" +
+                "AND (publication_date BETWEEN '"+dtpPublish1.Text+"' AND '"+dtpPublish2.Text+"')" +
+                "AND (number_of_pages BETWEEN '"+cbPage1.Text+"' AND '"+cbPage2.Text+"')" +
+                "AND (average_rating BETWEEN '"+cbRatings1.Text+"' AND '"+cbRatings2.Text+"')";
+            SqlDataAdapter sda = new SqlDataAdapter(query, conn);
+            DataTable dt = new DataTable();
+            sda.Fill(dt);
+
+            foreach (DataRow dr in dt.Rows)
+            {
+                DateTime publicationDate = DateTime.Parse(dr["publication_date"].ToString());
+                string formattedPublicationDate = publicationDate.ToString("dd MMMM yyyy");
+                dgvBook.Rows.Add(dr["id"], dr["long_text"], dr["title"], dr["isbn"], dr["isbn13"], dr["authors"], dr["name"], formattedPublicationDate, dr["number_of_pages"], dr["average_rating"] + " (" + dr["ratings_count"] + ")");
+            }
+        }
+    }
+}
